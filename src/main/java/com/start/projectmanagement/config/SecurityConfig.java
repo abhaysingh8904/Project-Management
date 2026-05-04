@@ -11,6 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -26,18 +27,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Frontend + health
+                        // ✅ Frontend static files
                         .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/health",
-                                "/favicon.ico",
-                                "/**/*.html",
-                                "/**/*.css",
-                                "/**/*.js",
-                                "/**/*.png",
-                                "/**/*.jpg",
-                                "/**/*.ico"
+                                new AntPathRequestMatcher("/"),
+                                new AntPathRequestMatcher("/index.html"),
+                                new AntPathRequestMatcher("/health"),
+                                new AntPathRequestMatcher("/favicon.ico"),
+                                new AntPathRequestMatcher("/*.css"),
+                                new AntPathRequestMatcher("/*.js"),
+                                new AntPathRequestMatcher("/*.png"),
+                                new AntPathRequestMatcher("/*.jpg"),
+                                new AntPathRequestMatcher("/static/**")
                         ).permitAll()
 
                         // Public auth routes
