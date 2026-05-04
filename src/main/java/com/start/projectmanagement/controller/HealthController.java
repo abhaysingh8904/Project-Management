@@ -7,7 +7,7 @@ import java.util.Map;
 @RestController
 public class HealthController {
 
-    @GetMapping("/")
+    @GetMapping("/api")
     public Map<String, String> root() {
         return Map.of("status", "ok", "app", "Project Management API");
     }
