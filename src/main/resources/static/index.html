@@ -475,6 +475,37 @@
 
     .progress-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin: 10px 0; }
     .progress-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width .5s ease; }
+
+
+    /* OVERDUE + PROGRESS UI */
+    .due-late {
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(239,68,68,0.25);
+    }
+    .due-ok {
+      color: var(--text2);
+      font-size: 12px;
+    }
+    .progress-wrap {
+      min-width: 140px;
+    }
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--text2);
+      margin-bottom: 6px;
+    }
+    .progress-bar.big {
+      height: 7px;
+      background: var(--bg3);
+      border-radius: 20px;
+      overflow: hidden;
+      margin: 0;
+    }
+    .progress-fill.done { background: linear-gradient(90deg, var(--accent), var(--green)); }
   </style>
 </head>
 <body>
@@ -614,13 +645,18 @@
           <div class="stat-value" id="stat-done">—</div>
           <div class="stat-chip chip-green">Completed</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Overdue</div>
+          <div class="stat-value" id="stat-overdue">—</div>
+          <div class="stat-chip chip-red">Late</div>
+        </div>
       </div>
       <div class="table-card">
         <div class="table-header"><span class="table-title">Recent projects</span></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Description</th><th>Tasks</th></tr></thead>
-            <tbody id="overview-projects-body"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody>
+            <thead><tr><th>Name</th><th>Description</th><th>Tasks</th><th>Progress</th></tr></thead>
+            <tbody id="overview-projects-body"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -644,7 +680,7 @@
       <div class="table-card">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Description</th><th>Progress</th><th>Actions</th></tr></thead>
             <tbody id="projects-body"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
@@ -669,8 +705,8 @@
       <div class="table-card">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Title</th><th>Status</th><th>Assigned To</th><th>Project</th><th>Actions</th></tr></thead>
-            <tbody id="tasks-body"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+            <thead><tr><th>Title</th><th>Status</th><th>Assigned To</th><th>Project</th><th>Due Date</th><th>Actions</th></tr></thead>
+            <tbody id="tasks-body"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -746,6 +782,7 @@
         <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="emp-stat-total">—</div><div class="stat-chip chip-blue">Tasks</div></div>
         <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value" id="emp-stat-inprog">—</div><div class="stat-chip chip-amber">Active</div></div>
         <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value" id="emp-stat-done">—</div><div class="stat-chip chip-green">Done</div></div>
+        <div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value" id="emp-stat-overdue">—</div><div class="stat-chip chip-red">Late</div></div>
       </div>
       <div id="emp-task-cards" class="task-cards"></div>
     </div>
@@ -761,8 +798,8 @@
       <div class="table-card">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Description</th></tr></thead>
-            <tbody id="emp-projects-body"><tr><td colspan="2" class="empty">Loading...</td></tr></tbody>
+            <thead><tr><th>Name</th><th>Description</th><th>Progress</th></tr></thead>
+            <tbody id="emp-projects-body"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -820,6 +857,10 @@
       <label class="form-label">Project (ID)</label>
       <input class="form-input" id="task-project-id" type="number" placeholder="Project ID e.g. 1">
     </div>
+    <div class="form-group">
+      <label class="form-label">Due Date</label>
+      <input class="form-input" id="task-due-date" type="date">
+    </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal('modal-task')">Cancel</button>
       <button class="btn-confirm" onclick="saveTask()">Save Task</button>
@@ -841,7 +882,7 @@
 
 <script>
   // ── STATE ──────────────────────────────────────────────────────
-  let STATE = { token: null, role: null, email: null, base: window.location.origin };
+  let STATE = { token: null, role: null, email: null, base: "" };
   let selectedRole = 'EMPLOYEE';
 
   // ── HELPERS ────────────────────────────────────────────────────
@@ -882,6 +923,38 @@
   };
 
   const esc = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+
+
+  const formatDate = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const isOverdue = (task) => {
+    if (!task || !task.dueDate || task.status === 'DONE') return false;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const due = new Date(task.dueDate);
+    due.setHours(0,0,0,0);
+    return due < today;
+  };
+
+  const projectProgress = (projectId, tasks) => {
+    const projectTasks = tasks.filter(t => t.project && t.project.id === projectId);
+    if (!projectTasks.length) return { total: 0, done: 0, percent: 0 };
+    const done = projectTasks.filter(t => t.status === 'DONE').length;
+    return { total: projectTasks.length, done, percent: Math.round((done / projectTasks.length) * 100) };
+  };
+
+  const progressHtml = (percent, total = null, done = null) => `
+    <div class="progress-wrap">
+      <div class="progress-info">
+        <span>${done !== null && total !== null ? `${done}/${total} done` : 'Progress'}</span>
+        <span>${percent}%</span>
+      </div>
+      <div class="progress-bar big"><div class="progress-fill done" style="width:${percent}%"></div></div>
+    </div>`;
 
   const filterTable = (tbodyId, q, cols) => {
     const rows = document.querySelectorAll(`#${tbodyId} tr`);
@@ -993,18 +1066,21 @@
     document.getElementById('stat-tasks').textContent    = tasks.length;
     document.getElementById('stat-users').textContent    = users.length;
     const done = tasks.filter(t => t.status === 'DONE').length;
+    const overdue = tasks.filter(isOverdue).length;
     document.getElementById('stat-done').textContent = done;
+    document.getElementById('stat-overdue').textContent = overdue;
 
     const tbody = document.getElementById('overview-projects-body');
     if (!projects.length) {
-      tbody.innerHTML = '<tr><td colspan="3" class="empty">No projects yet</td></tr>'; return;
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No projects yet</td></tr>'; return;
     }
     tbody.innerHTML = projects.slice(0,5).map(p => {
-      const tc = tasks.filter(t => t.project && t.project.id === p.id).length;
+      const prog = projectProgress(p.id, tasks);
       return `<tr>
       <td><strong>${esc(p.name)}</strong></td>
       <td style="color:var(--text2)">${esc(p.description||'—')}</td>
-      <td><span class="stat-chip chip-purple">${tc} tasks</span></td>
+      <td><span class="stat-chip chip-purple">${prog.total} tasks</span></td>
+      <td>${progressHtml(prog.percent, prog.total, prog.done)}</td>
     </tr>`;
     }).join('');
   };
@@ -1012,25 +1088,30 @@
   // ── PROJECTS CRUD ──────────────────────────────────────────────
   let allProjects = [];
   const loadProjects = async () => {
-    const r = await api('GET', '/projects');
-    allProjects = r.ok && Array.isArray(r.data) ? r.data : [];
+    const [pr, tr] = await Promise.all([api('GET', '/projects'), api('GET', '/tasks')]);
+    allProjects = pr.ok && Array.isArray(pr.data) ? pr.data : [];
+    allTasks = tr.ok && Array.isArray(tr.data) ? tr.data : [];
     renderProjects();
   };
 
   const renderProjects = () => {
     const tbody = document.getElementById('projects-body');
     if (!allProjects.length) {
-      tbody.innerHTML = '<tr><td colspan="3" class="empty">No projects yet. Create one!</td></tr>'; return;
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No projects yet. Create one!</td></tr>'; return;
     }
-    tbody.innerHTML = allProjects.map(p => `
+    tbody.innerHTML = allProjects.map(p => {
+      const prog = projectProgress(p.id, allTasks);
+      return `
     <tr>
       <td><strong>${esc(p.name)}</strong></td>
       <td style="color:var(--text2)">${esc(p.description||'—')}</td>
+      <td>${progressHtml(prog.percent, prog.total, prog.done)}</td>
       <td><div class="actions">
         <button class="action-btn" onclick="editProject(${p.id},'${esc(p.name)}','${esc(p.description||'')}')">Edit</button>
         <button class="action-btn danger" onclick="confirmDelete('project',${p.id},'${esc(p.name)}')">Delete</button>
       </div></td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
   };
 
   const openNewProject = () => {
@@ -1077,22 +1158,25 @@
   const renderTasks = () => {
     const tbody = document.getElementById('tasks-body');
     if (!allTasks.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No tasks yet. Create one!</td></tr>'; return;
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No tasks yet. Create one!</td></tr>'; return;
     }
     tbody.innerHTML = allTasks.map(t => `
     <tr>
-      <td><strong>${esc(t.title)}</strong>${t.description?`<br><span style='font-size:11px;color:var(--text2)'>${esc(t.description)}</span>`:''}  </td>
+      <td><strong>${esc(t.title)}</strong>${t.description?`<br><span style='font-size:11px;color:var(--text2)'>${esc(t.description)}</span>`:''}</td>
       <td>${statusBadge(t.status)}</td>
       <td style="color:var(--text2)">${t.assignedTo ? esc(t.assignedTo.name||t.assignedTo.email||'#'+t.assignedTo.id) : '—'}</td>
       <td style="color:var(--text2)">${t.project ? esc(t.project.name||'#'+t.project.id) : '—'}</td>
+      <td>${isOverdue(t)
+        ? `<span class="status-badge due-late">Overdue · ${formatDate(t.dueDate)}</span>`
+        : `<span class="due-ok">${formatDate(t.dueDate)}</span>`}</td>
       <td><div class="actions">
-        <button class="action-btn" onclick="editTask(${t.id},'${esc(t.title)}','${esc(t.description||'')}','${t.status}',${t.assignedTo?t.assignedTo.id:''},${t.project?t.project.id:''})">Edit</button>
+        <button class="action-btn" onclick="editTask(${t.id},'${esc(t.title)}','${esc(t.description||'')}','${t.status}',${t.assignedTo?t.assignedTo.id:''},${t.project?t.project.id:''},'${t.dueDate || ''}')">Edit</button>
         <button class="action-btn danger" onclick="confirmDelete('task',${t.id},'${esc(t.title)}')">Delete</button>
       </div></td>
     </tr>`).join('');
   };
 
-  const editTask = (id, title, desc, status, userId, projectId) => {
+  const editTask = (id, title, desc, status, userId, projectId, dueDate) => {
     document.getElementById('modal-task-title').textContent = 'Edit Task';
     document.getElementById('task-edit-id').value = id;
     document.getElementById('task-title').value = title;
@@ -1100,12 +1184,13 @@
     document.getElementById('task-status').value = status;
     document.getElementById('task-user-id').value = userId || '';
     document.getElementById('task-project-id').value = projectId || '';
+    document.getElementById('task-due-date').value = dueDate ? dueDate.split('T')[0] : '';
     openModal('modal-task');
   };
 
   const openNewTask = () => {
     document.getElementById('modal-task-title').textContent = 'New Task';
-    ['task-edit-id','task-title','task-desc','task-user-id','task-project-id'].forEach(id => document.getElementById(id).value = '');
+    ['task-edit-id','task-title','task-desc','task-user-id','task-project-id','task-due-date'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('task-status').value = 'TODO';
     openModal('modal-task');
   };
@@ -1117,9 +1202,10 @@
     const status = document.getElementById('task-status').value;
     const uid  = document.getElementById('task-user-id').value;
     const pid  = document.getElementById('task-project-id').value;
+    const dueDate = document.getElementById('task-due-date').value;
     if (!title) { toast('Task title required', 'error'); return; }
     const body = {
-      title, description: desc, status,
+      title, description: desc, status, dueDate: dueDate || null,
       ...(uid ? { assignedTo: { id: parseInt(uid) } } : {}),
       ...(pid ? { project:    { id: parseInt(pid) } } : {})
     };
@@ -1174,6 +1260,7 @@
     document.getElementById('emp-stat-total').textContent  = myTasks.length;
     document.getElementById('emp-stat-inprog').textContent = myTasks.filter(t => t.status==='IN_PROGRESS').length;
     document.getElementById('emp-stat-done').textContent   = myTasks.filter(t => t.status==='DONE').length;
+    document.getElementById('emp-stat-overdue').textContent = myTasks.filter(isOverdue).length;
 
     const container = document.getElementById('emp-task-cards');
     if (!myTasks.length) {
@@ -1184,6 +1271,7 @@
       return `<div class="task-card">
       <div class="task-card-title">${esc(t.title)}</div>
       <div class="task-card-desc">${esc(t.description||'No description')}</div>
+      <div style="margin-bottom:10px">${isOverdue(t) ? `<span class="status-badge due-late">Overdue · ${formatDate(t.dueDate)}</span>` : `<span class="due-ok">Due: ${formatDate(t.dueDate)}</span>`}</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="task-card-meta">
         ${statusBadge(t.status)}
@@ -1208,17 +1296,25 @@
   };
 
   const loadEmpProjects = async () => {
-    const r = await api('GET', '/projects');
-    const projects = r.ok && Array.isArray(r.data) ? r.data : [];
+    const [pr, tr] = await Promise.all([api('GET', '/projects'), api('GET', '/tasks')]);
+    const projects = pr.ok && Array.isArray(pr.data) ? pr.data : [];
+    const tasks = tr.ok && Array.isArray(tr.data) ? tr.data : [];
+    const myTasks = tasks.filter(t => t.assignedTo && t.assignedTo.email === STATE.email);
+    const myProjectIds = new Set(myTasks.filter(t => t.project).map(t => t.project.id));
+    const visibleProjects = projects.filter(p => myProjectIds.has(p.id));
     const tbody = document.getElementById('emp-projects-body');
-    if (!projects.length) {
-      tbody.innerHTML = '<tr><td colspan="2" class="empty">No projects yet</td></tr>'; return;
+    if (!visibleProjects.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty">No projects assigned yet</td></tr>'; return;
     }
-    tbody.innerHTML = projects.map(p => `
+    tbody.innerHTML = visibleProjects.map(p => {
+      const prog = projectProgress(p.id, myTasks);
+      return `
     <tr>
       <td><strong>${esc(p.name)}</strong></td>
       <td style="color:var(--text2)">${esc(p.description||'—')}</td>
-    </tr>`).join('');
+      <td>${progressHtml(prog.percent, prog.total, prog.done)}</td>
+    </tr>`;
+    }).join('');
   };
 
   // ── MODAL CLICK THROUGH ─────────────────────────────────────────
