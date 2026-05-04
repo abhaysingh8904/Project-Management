@@ -26,11 +26,19 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Allow frontend static files
-                        .requestMatchers("/", "/index.html", "/static/**", "/*.js", "/*.css", "/*.ico").permitAll()
-
-                        // ✅ Public health check
-                        .requestMatchers("/health").permitAll()
+                        // ✅ Frontend + health
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/health",
+                                "/favicon.ico",
+                                "/**/*.html",
+                                "/**/*.css",
+                                "/**/*.js",
+                                "/**/*.png",
+                                "/**/*.jpg",
+                                "/**/*.ico"
+                        ).permitAll()
 
                         // Public auth routes
                         .requestMatchers("/auth/**").permitAll()
