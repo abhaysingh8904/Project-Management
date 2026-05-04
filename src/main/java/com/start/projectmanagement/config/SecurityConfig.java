@@ -26,8 +26,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ Public health check endpoints
-                        .requestMatchers("/", "/health").permitAll()
+                        // ✅ Allow frontend static files
+                        .requestMatchers("/", "/index.html", "/static/**", "/*.js", "/*.css", "/*.ico").permitAll()
+
+                        // ✅ Public health check
+                        .requestMatchers("/health").permitAll()
 
                         // Public auth routes
                         .requestMatchers("/auth/**").permitAll()
