@@ -22,11 +22,14 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors(withDefaults())                    // ← enables CORS using CorsConfig bean
+                .cors(withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public
+                        // ✅ Public health check endpoints
+                        .requestMatchers("/", "/health").permitAll()
+
+                        // Public auth routes
                         .requestMatchers("/auth/**").permitAll()
 
                         // ADMIN ONLY — user management
